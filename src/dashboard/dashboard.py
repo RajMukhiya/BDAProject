@@ -17,6 +17,7 @@ import subprocess
 import datetime
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -645,6 +646,19 @@ def get_latest_pipeline_logs(lines=45):
     return "No execution log recorded yet. Launch a pipeline or Spark job below to begin streaming logs."
 
 
+def trigger_auto_refresh(interval_sec: int = 60):
+    """Reload the whole dashboard after `interval_sec` seconds (non-blocking).
+
+    Uses a sandboxed component that reloads the parent window, so the Streamlit
+    script keeps running and the UI stays interactive until the timer fires.
+    A fresh page load also re-runs data loading, picking up new HDFS output.
+    """
+    components.html(
+        f"<script>setTimeout(function() {{ window.parent.location.reload(); }}, {int(interval_sec) * 1000});</script>",
+        height=0,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
@@ -679,6 +693,15 @@ def render_sidebar(prices_df, anomalies_df, cluster_metrics=None):
             if st.button("🔄 Check & Refresh Data", use_container_width=True):
                 st.cache_data.clear()
                 st.rerun()
+            # Auto-refresh option: reload every 60s while a job is running so new
+            # HDFS output appears without manual clicks (Issue 3.3).
+            auto_refresh = st.checkbox(
+                "🔁 Auto-refresh (60s)", value=False,
+                help="Automatically reload the dashboard every 60 seconds while the pipeline is running."
+            )
+            if auto_refresh:
+                st.caption("⏱️ Auto-refreshing every 60s…")
+                trigger_auto_refresh(60)
         else:
             has_data = not prices_df.empty
             if has_data:

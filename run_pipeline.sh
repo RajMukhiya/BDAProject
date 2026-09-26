@@ -10,10 +10,33 @@
 #   bash /app/run_pipeline.sh --nlp-only     (Spark NLP sentiment job only)
 #   bash /app/run_pipeline.sh --anomaly-only (Spark Anomaly detection job only)
 #   bash /app/run_pipeline.sh --momentum-only(Spark Momentum MapReduce job only)
+#   bash /app/run_pipeline.sh --status       (Print HDFS data counts & exit — no processing)
 # ============================================================================
 set -e
 
 MODE="${1:---quick}"
+
+# ── Status mode: print HDFS data counts / job markers and exit (no processing) ──
+if [ "${MODE}" = "--status" ]; then
+    echo "📊 HDFS Data Status Report — $(date)"
+    echo "────────────────────────────────────────────────────────────"
+    echo "  Columns: DIR_COUNT  FILE_COUNT  CONTENT_SIZE(bytes)  PATH"
+    hdfs dfs -count /data/raw/prices /data/raw/news \
+        /data/processed/sentiment /data/processed/anomalies \
+        /data/processed/momentum 2>/dev/null \
+        || echo "  ⚠️  HDFS not reachable (NameNode down or in Safe Mode)."
+    echo "────────────────────────────────────────────────────────────"
+    echo "  Spark ML job completion markers:"
+    for d in /data/processed/sentiment /data/processed/anomalies /data/processed/momentum; do
+        if hdfs dfs -test -e "${d}/_SUCCESS" 2>/dev/null; then
+            echo "    ✅ ${d} — _SUCCESS present"
+        else
+            echo "    ⏳ ${d} — no _SUCCESS (pending or failed)"
+        fi
+    done
+    echo "────────────────────────────────────────────────────────────"
+    exit 0
+fi
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
@@ -72,7 +95,7 @@ case "${MODE}" in
         ;;
 
     --spark-only)
-        echo "⏩ Skipping ingestion — Running Spark ML on existing HDFS data..."
+        echo "⏩ Skipping ingestion — Running Spark ML on existing HDFS data..." | tee -a /tmp/pipeline.log
         run_spark_sentiment
         run_spark_anomaly
         run_spark_momentum
@@ -91,11 +114,11 @@ case "${MODE}" in
         ;;
 
     --full)
-        echo "📈 Stage 1/3: Ingesting Price Data for all 500 NIFTY Stocks (5y)..."
-        python -m src.ingestion.fetch_price --period 5y || echo "⚠️  Price ingestion had errors, continuing..."
-        echo "📰 Stage 2/3: Ingesting RSS News Data..."
-        python -m src.ingestion.fetch_news || echo "⚠️  News ingestion had errors, continuing..."
-        echo "🧠 Stage 3/3: Running Distributed Spark ML Cluster..."
+        echo "📈 Stage 1/3: Ingesting Price Data for all 500 NIFTY Stocks (5y)..." | tee -a /tmp/pipeline.log
+        python -m src.ingestion.fetch_price --period 5y 2>&1 | tee -a /tmp/pipeline.log || echo "⚠️  Price ingestion had errors, continuing..." | tee -a /tmp/pipeline.log
+        echo "📰 Stage 2/3: Ingesting RSS News Data..." | tee -a /tmp/pipeline.log
+        python -m src.ingestion.fetch_news 2>&1 | tee -a /tmp/pipeline.log || echo "⚠️  News ingestion had errors, continuing..." | tee -a /tmp/pipeline.log
+        echo "🧠 Stage 3/3: Running Distributed Spark ML Cluster..." | tee -a /tmp/pipeline.log
         run_spark_sentiment
         run_spark_anomaly
         run_spark_momentum
