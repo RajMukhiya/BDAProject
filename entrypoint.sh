@@ -95,4 +95,6 @@ echo " Container ready. Staying alive..."
 echo "============================================"
 
 # Keep container alive indefinitely
-exec tail -f /dev/null
+while true; do
+    sleep 3600
+done
