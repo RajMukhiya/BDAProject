@@ -114,7 +114,7 @@ def fetch_feeds(max_articles: int = 1000) -> pd.DataFrame:
                         "source": source,
                         "title": title,
                         "summary": summary[:500],
-                        "published": published,
+                        "published_date": published,  # matches NLP sentiment schema
                         "link": entry.get("link", ""),
                         "matched_tickers": ",".join(tickers) if tickers else "GENERAL",
                         "fetched_at": datetime.datetime.now().isoformat(),

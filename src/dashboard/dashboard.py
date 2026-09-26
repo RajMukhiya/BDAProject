@@ -311,7 +311,7 @@ def normalize_momentum(df):
 # ---------------------------------------------------------------------------
 # Cluster Telemetry & Engine Inspection (Spark, HDFS, YARN)
 # ---------------------------------------------------------------------------
-def is_port_open(host: str, port: int, timeout: float = 0.25) -> bool:
+def is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     """Fast check whether a network port is reachable without blocking on long HTTP timeouts."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -568,6 +568,13 @@ def load_all_data():
     sentiment = normalize_sentiment(sentiment)
     anomalies = normalize_anomalies(anomalies)
     momentum = normalize_momentum(momentum)
+
+    # Show a helpful banner if HDFS is still initializing (all data empty)
+    if prices.empty and sentiment.empty and anomalies.empty:
+        st.info(
+            "⏳ **HDFS is initializing.** Data will appear within 1–2 minutes after cluster starts. "
+            "If this persists, use the **Quick Run** or **Spark ML (HDFS)** button in the sidebar."
+        )
 
     return prices, sentiment, anomalies, momentum, news
 

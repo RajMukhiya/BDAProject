@@ -22,28 +22,35 @@ if [ "${NODE_ROLE}" = "master" ]; then
     echo "[MASTER] Starting HDFS NameNode..."
     hdfs --daemon start namenode
 
-    echo "[MASTER] Starting YARN ResourceManager..."
-    yarn --daemon start resourcemanager
-
     echo "[MASTER] Starting Spark Master..."
     ${SPARK_HOME}/sbin/start-master.sh
 
     echo "[MASTER] Starting MapReduce JobHistory Server..."
     mapred --daemon start historyserver
 
-    echo "[MASTER] All services started."
+    echo "[MASTER] All NameNode/Spark services started."
 
     # Wait for DataNodes to register and leave Safe Mode before any write operations
     echo "[MASTER] Waiting for DataNodes to register and HDFS to exit Safe Mode..."
     sleep 5
-    hdfs dfsadmin -safemode wait
+    hdfs dfsadmin -safemode wait || true
     hdfs dfsadmin -safemode leave || true
-    hdfs dfsadmin -report
+    hdfs dfsadmin -report || true
 
     # Prepare HDFS directories
     echo "[MASTER] Ensuring HDFS directory structure exists..."
-    hdfs dfs -mkdir -p /spark-logs /data/raw/prices /data/raw/news /data/processed/sentiment /data/processed/anomalies /data/processed/momentum || true
-    hdfs dfs -chmod -R 777 /spark-logs /data || true
+    hdfs dfs -mkdir -p /spark-logs /data/raw/prices /data/raw/news /data/processed/sentiment /data/processed/anomalies /data/processed/momentum /tmp/hadoop-yarn/staging || true
+    # Retry chmod in case HDFS is still leaving Safe Mode
+    for _i in 1 2 3 4 5; do
+        hdfs dfs -chmod -R 777 /spark-logs /data /tmp/hadoop-yarn 2>/dev/null && break || echo "[MASTER] chmod attempt ${_i} failed (Safe Mode?), retrying in 5s..."
+        sleep 5
+    done || true
+
+    # Now start YARN ResourceManager (after HDFS is writable)
+    echo "[MASTER] Starting YARN ResourceManager..."
+    mkdir -p /tmp/hadoop-yarn-nodeattr
+    yarn --daemon start resourcemanager
+    echo "[MASTER] ResourceManager started."
 
     # Upload local seed data to HDFS if available and not already loaded
     if [ -d "/app/data/raw/prices" ] && [ $(ls -1 /app/data/raw/prices/*.csv 2>/dev/null | wc -l) -gt 0 ]; then
@@ -74,8 +81,10 @@ if [ "${NODE_ROLE}" = "master" ]; then
         > /tmp/streamlit.log 2>&1 &
 
     # Auto-run the data pipeline in background
+    # pipeline.log is created/appended by run_pipeline.sh itself via tee -a
     echo "[MASTER] Launching data pipeline in background..."
-    nohup bash /app/run_pipeline.sh > /tmp/pipeline.log 2>&1 &
+    : > /tmp/pipeline.log  # truncate/create the log file cleanly
+    nohup bash /app/run_pipeline.sh >> /tmp/pipeline.log 2>&1 &
 
 else
     echo "[SLAVE] Starting HDFS DataNode..."

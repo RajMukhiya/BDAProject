@@ -39,4 +39,10 @@
         <name>yarn.nodemanager.vmem-check-enabled</name>
         <value>false</value>
     </property>
+    <!-- Fix: Set explicit nodeAttributeStore path to avoid Hadoop 3.3.x NPE
+         (NullPointerException in NodeAttributeMirrorOp.recover on fresh container start) -->
+    <property>
+        <name>yarn.node-attribute.fs-store.root-dir</name>
+        <value>/tmp/hadoop-yarn-nodeattr</value>
+    </property>
 </configuration>

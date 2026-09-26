@@ -57,7 +57,7 @@ def load_price_data(spark):
                 StructField("Low", DoubleType(), True),
                 StructField("Close", DoubleType(), True),
                 StructField("Adj Close", DoubleType(), True),
-                StructField("Volume", DoubleType(), True),
+                StructField("Volume", StringType(), True),  # Read as string; yfinance may write int or float
                 StructField("Ticker", StringType(), True),
                 StructField("Exchange", StringType(), True),
             ])
@@ -66,15 +66,18 @@ def load_price_data(spark):
             rename_map = {
                 "Date": "trade_date", "Open": "open_price", "High": "high_price",
                 "Low": "low_price", "Close": "close_price", "Adj Close": "adj_close",
-                "Volume": "volume", "Ticker": "ticker", "Exchange": "exchange",
+                "Ticker": "ticker", "Exchange": "exchange",
             }
             for old, new in rename_map.items():
                 if old in df.columns and old != new:
                     df = df.withColumnRenamed(old, new)
-            print(f"✅ Registered price stream from {path}")
+            # Cast Volume explicitly to DoubleType after rename
+            if "Volume" in df.columns:
+                df = df.withColumn("volume", F.col("Volume").cast(DoubleType())).drop("Volume")
+            print(f"\u2705 Registered price stream from {path}")
             return df
         except Exception as e:
-            print(f"⚠️  Could not load prices from {path}: {e}")
+            print(f"\u26a0\ufe0f  Could not load prices from {path}: {e}")
     return None
 
 

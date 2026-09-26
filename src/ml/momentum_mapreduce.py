@@ -199,8 +199,12 @@ def main():
     # Distributed Write purely to HDFS
     hdfs_path = "hdfs://master:9000/data/processed/momentum"
     try:
-        all_momentum.write.mode("overwrite").csv(hdfs_path, header=True)
-        print(f"✅ Momentum indices saved to HDFS.")
+        row_count = all_momentum.count()
+        if row_count == 0:
+            print("⚠️  Momentum output is empty — skipping HDFS write to preserve existing data.")
+        else:
+            all_momentum.write.mode("overwrite").csv(hdfs_path, header=True)
+            print(f"✅ Momentum indices saved to HDFS ({row_count:,} rows).")
     except Exception as e:
         print(f"⚠️  HDFS write failed: {e}")
 

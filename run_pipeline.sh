@@ -26,46 +26,46 @@ echo ""
 cd /app
 
 run_spark_sentiment() {
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "🧠 Spark ML: NLP Sentiment Analysis (Cluster: spark://master:7077)"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a /tmp/pipeline.log
+    echo "🧠 Spark ML: NLP Sentiment Analysis (Cluster: spark://master:7077)" | tee -a /tmp/pipeline.log
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a /tmp/pipeline.log
     spark-submit --master spark://master:7077 \
         --conf spark.cores.max=4 \
         --driver-memory 768m --executor-memory 768m \
-        /app/src/ml/nlp_sentiment.py || {
-        echo "⚠️  Sentiment pipeline had warnings/errors."
+        /app/src/ml/nlp_sentiment.py 2>&1 | tee -a /tmp/pipeline.log || {
+        echo "⚠️  Sentiment pipeline had warnings/errors." | tee -a /tmp/pipeline.log
     }
 }
 
 run_spark_anomaly() {
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "⚡ Spark ML: Price-Volume Anomaly Detection"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a /tmp/pipeline.log
+    echo "⚡ Spark ML: Price-Volume Anomaly Detection" | tee -a /tmp/pipeline.log
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a /tmp/pipeline.log
     spark-submit --master spark://master:7077 \
         --conf spark.cores.max=4 \
         --driver-memory 768m --executor-memory 768m \
-        /app/src/ml/anomaly_detector.py || {
-        echo "⚠️  Anomaly detection had warnings/errors."
+        /app/src/ml/anomaly_detector.py 2>&1 | tee -a /tmp/pipeline.log || {
+        echo "⚠️  Anomaly detection had warnings/errors." | tee -a /tmp/pipeline.log
     }
 }
 
 run_spark_momentum() {
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📈 Spark ML: Sector Momentum MapReduce"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a /tmp/pipeline.log
+    echo "📈 Spark ML: Sector Momentum MapReduce" | tee -a /tmp/pipeline.log
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a /tmp/pipeline.log
     spark-submit --master spark://master:7077 \
         --conf spark.cores.max=4 \
         --driver-memory 768m --executor-memory 768m \
-        /app/src/ml/momentum_mapreduce.py || {
-        echo "⚠️  Momentum pipeline had warnings/errors."
+        /app/src/ml/momentum_mapreduce.py 2>&1 | tee -a /tmp/pipeline.log || {
+        echo "⚠️  Momentum pipeline had warnings/errors." | tee -a /tmp/pipeline.log
     }
 }
 
 case "${MODE}" in
     --big-data)
-        echo "🚀 Stage 1/2: Generating Multi-Million High-Frequency Intraday & News Big Data (5–10 GB scale)..."
-        python -m src.ingestion.generate_big_data --tickers-count 500 --records-per-ticker 50000 --news-count 150000 --upload-hdfs || echo "⚠️  Big Data generation had errors, continuing..."
-        echo "🧠 Stage 2/2: Running Distributed Spark ML Cluster on Big Data..."
+        echo "🚀 Stage 1/2: Generating Multi-Million High-Frequency Intraday & News Big Data (5–10 GB scale)..." | tee -a /tmp/pipeline.log
+        python -m src.ingestion.generate_big_data --tickers-count 500 --records-per-ticker 50000 --news-count 150000 --upload-hdfs 2>&1 | tee -a /tmp/pipeline.log || echo "⚠️  Big Data generation had errors, continuing..." | tee -a /tmp/pipeline.log
+        echo "🧠 Stage 2/2: Running Distributed Spark ML Cluster on Big Data..." | tee -a /tmp/pipeline.log
         run_spark_sentiment
         run_spark_anomaly
         run_spark_momentum
@@ -102,21 +102,25 @@ case "${MODE}" in
         ;;
 
     --quick|*)
-        echo "📈 Stage 1/3: Ingesting Price Data for Top 30 High-Volume Stocks (2y)..."
-        python -m src.ingestion.fetch_price --period 2y --limit 30 || echo "⚠️  Price ingestion had errors, continuing..."
-        echo "📰 Stage 2/3: Ingesting RSS News Data..."
-        python -m src.ingestion.fetch_news || echo "⚠️  News ingestion had errors, continuing..."
-        echo "🧠 Stage 3/3: Running Distributed Spark ML Cluster..."
+        echo "📈 Stage 1/3: Ingesting Price Data for Top 30 High-Volume Stocks (2y)..." | tee -a /tmp/pipeline.log
+        python -m src.ingestion.fetch_price --period 2y --limit 30 2>&1 | tee -a /tmp/pipeline.log || echo "⚠️  Price ingestion had errors, continuing..." | tee -a /tmp/pipeline.log
+        echo "📰 Stage 2/3: Ingesting RSS News Data..." | tee -a /tmp/pipeline.log
+        python -m src.ingestion.fetch_news 2>&1 | tee -a /tmp/pipeline.log || echo "⚠️  News ingestion had errors, continuing..." | tee -a /tmp/pipeline.log
+        echo "🧠 Stage 3/3: Running Distributed Spark ML Cluster..." | tee -a /tmp/pipeline.log
         run_spark_sentiment
         run_spark_anomaly
         run_spark_momentum
         ;;
 esac
 
-echo ""
-echo "╔══════════════════════════════════════════════════════════╗"
-echo "║  ✅ Execution Completed!                                 ║"
-echo "║  Check Spark Master at: http://localhost:8080            ║"
-echo "║  Dashboard at:         http://localhost:8501            ║"
-echo "╚══════════════════════════════════════════════════════════╝"
-echo ""
+echo "" | tee -a /tmp/pipeline.log
+echo "╔══════════════════════════════════════════════════════════╗" | tee -a /tmp/pipeline.log
+echo "║  ✅ Execution Completed!                                 ║" | tee -a /tmp/pipeline.log
+echo "║  Check Spark Master at: http://localhost:8080            ║" | tee -a /tmp/pipeline.log
+echo "║  Dashboard at:         http://localhost:8501            ║" | tee -a /tmp/pipeline.log
+echo "╚══════════════════════════════════════════════════════════╝" | tee -a /tmp/pipeline.log
+echo "" | tee -a /tmp/pipeline.log
+
+# Print HDFS data summary
+echo "📊 HDFS Data Summary:" | tee -a /tmp/pipeline.log
+hdfs dfs -count /data/raw/prices /data/raw/news /data/processed/sentiment /data/processed/anomalies /data/processed/momentum 2>/dev/null | tee -a /tmp/pipeline.log || true
