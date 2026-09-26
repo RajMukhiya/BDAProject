@@ -1,0 +1,94 @@
+# ============================================================================
+# Docker Compose for Hadoop/Spark Cluster (1 Master + 3 Slaves)
+#
+# Single machine:  docker-compose up --build
+# Multi-host:      Switch driver to 'overlay' and use Docker Swarm
+# ============================================================================
+
+networks:
+  hadoop-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1280"
+
+services:
+  # ===================== MASTER NODE =====================
+  master:
+    build: .
+    image: bdatl-hadoop:latest
+    container_name: master
+    hostname: master
+    restart: unless-stopped
+    environment:
+      - NODE_ROLE=master
+    ports:
+      - "9870:9870"     # HDFS NameNode UI
+      - "9000:9000"     # HDFS IPC
+      - "8088:8088"     # YARN ResourceManager UI
+      - "8080:8080"     # Spark Master UI
+      - "7077:7077"     # Spark Master
+      - "4040:4040"     # Spark Application UI
+      - "8501:8501"     # Streamlit Dashboard
+      - "19888:19888"   # MapReduce History Server
+    volumes:
+      - master-hdfs-name:/hadoop/dfs/name
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./entrypoint.sh:/entrypoint.sh
+      - ./run_pipeline.sh:/app/run_pipeline.sh
+    networks:
+      - hadoop-net
+
+  # ===================== SLAVE NODE 1 =====================
+  slave1:
+    image: bdatl-hadoop:latest
+    container_name: slave1
+    hostname: slave1
+    restart: unless-stopped
+    environment:
+      - NODE_ROLE=slave
+    volumes:
+      - slave1-hdfs-data:/hadoop/dfs/data
+      - ./entrypoint.sh:/entrypoint.sh
+    networks:
+      - hadoop-net
+    depends_on:
+      - master
+
+  # ===================== SLAVE NODE 2 =====================
+  slave2:
+    image: bdatl-hadoop:latest
+    container_name: slave2
+    hostname: slave2
+    restart: unless-stopped
+    environment:
+      - NODE_ROLE=slave
+    volumes:
+      - slave2-hdfs-data:/hadoop/dfs/data
+      - ./entrypoint.sh:/entrypoint.sh
+    networks:
+      - hadoop-net
+    depends_on:
+      - master
+
+  # ===================== SLAVE NODE 3 =====================
+  slave3:
+    image: bdatl-hadoop:latest
+    container_name: slave3
+    hostname: slave3
+    restart: unless-stopped
+    environment:
+      - NODE_ROLE=slave
+    volumes:
+      - slave3-hdfs-data:/hadoop/dfs/data
+      - ./entrypoint.sh:/entrypoint.sh
+    networks:
+      - hadoop-net
+    depends_on:
+      - master
+
+volumes:
+  master-hdfs-name:
+  slave1-hdfs-data:
+  slave2-hdfs-data:
+  slave3-hdfs-data:

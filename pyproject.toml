@@ -1,0 +1,14 @@
+[project]
+name = "stockanalysisbda"
+version = "0.1.0"
+description = "Indian Market Stock Sentiment & Price Analysis Engine"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.pyrefly]
+disable-search-path-heuristics = true
+search-path = [".", "src"]
+
+[tool.pyright]
+extraPaths = [".", "src"]
