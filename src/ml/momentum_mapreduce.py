@@ -34,7 +34,9 @@ ROLLING_WINDOWS = [30, 60, 90]
 def create_spark_session():
     return (SparkSession.builder
             .appName("BDATL_Sentiment_Momentum")
-            .config("spark.sql.shuffle.partitions", "6")
+            .config("spark.sql.shuffle.partitions", "12")
+            .config("spark.network.timeout", "300s")
+            .config("spark.executor.heartbeatInterval", "30s")
             .getOrCreate())
 
 def load_price_data(spark):
