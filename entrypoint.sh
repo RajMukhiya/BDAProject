@@ -45,14 +45,24 @@ if [ "${NODE_ROLE}" = "master" ]; then
     hdfs dfs -mkdir -p /spark-logs /data/raw/prices /data/raw/news /data/processed/sentiment /data/processed/anomalies /data/processed/momentum || true
     hdfs dfs -chmod -R 777 /spark-logs /data || true
 
-    # Upload local seed data to HDFS if available
+    # Upload local seed data to HDFS if available and not already loaded
     if [ -d "/app/data/raw/prices" ] && [ $(ls -1 /app/data/raw/prices/*.csv 2>/dev/null | wc -l) -gt 0 ]; then
-        echo "[MASTER] Loading seed price CSVs into HDFS..."
-        hdfs dfs -put -f /app/data/raw/prices/*.csv /data/raw/prices/ || true
+        PRICE_COUNT=$(hdfs dfs -ls /data/raw/prices 2>/dev/null | grep -c "\.csv" || true)
+        if [ "$PRICE_COUNT" -eq 0 ]; then
+            echo "[MASTER] Loading seed price CSVs into HDFS..."
+            hdfs dfs -put -f /app/data/raw/prices/*.csv /data/raw/prices/ || true
+        else
+            echo "[MASTER] Price data already present in HDFS ($PRICE_COUNT files), skipping seed upload."
+        fi
     fi
     if [ -d "/app/data/raw/news" ] && [ $(ls -1 /app/data/raw/news/*.csv 2>/dev/null | wc -l) -gt 0 ]; then
-        echo "[MASTER] Loading seed news CSVs into HDFS..."
-        hdfs dfs -put -f /app/data/raw/news/*.csv /data/raw/news/ || true
+        NEWS_COUNT=$(hdfs dfs -ls /data/raw/news 2>/dev/null | grep -c "\.csv" || true)
+        if [ "$NEWS_COUNT" -eq 0 ]; then
+            echo "[MASTER] Loading seed news CSVs into HDFS..."
+            hdfs dfs -put -f /app/data/raw/news/*.csv /data/raw/news/ || true
+        else
+            echo "[MASTER] News data already present in HDFS ($NEWS_COUNT files), skipping seed upload."
+        fi
     fi
 
     echo "[MASTER] Starting Streamlit Dashboard on port 8501..."
@@ -81,8 +91,8 @@ else
 fi
 
 echo "============================================"
-echo " Container ready. Tailing logs..."
+echo " Container ready. Staying alive..."
 echo "============================================"
 
-# Keep container alive by tailing Hadoop logs
-tail -f ${HADOOP_HOME}/logs/*.log 2>/dev/null || tail -f /dev/null
+# Keep container alive indefinitely
+exec tail -f /dev/null

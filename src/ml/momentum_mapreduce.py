@@ -190,6 +190,12 @@ def main():
         else:
             all_momentum = all_momentum.unionByName(momentum_df)
 
+    if all_momentum is None:
+        print("⚠️ No momentum data computed.")
+        daily_sector.unpersist()
+        spark.stop()
+        return
+
     # Distributed Write purely to HDFS
     hdfs_path = "hdfs://master:9000/data/processed/momentum"
     try:
