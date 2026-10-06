@@ -13,15 +13,6 @@
 **Under the Guidance of:**  
 **Dr. Archana Chaudhary**, *Associate Professor, Department of AI & ML, SIT Pune*
 
-### Project Contributors
-| Name | PRN | Role & Core Domain |
-| :--- | :--- | :--- |
-| **Pankaj Yadav** | **23070126166** | Hadoop HDFS Storage, YARN Cluster Resource Scheduling & Configurations |
-| **Lucy** | **23070126169** | Apache Hive Data Warehousing, Partitioning & Apache HBase NoSQL Store |
-| **Raj Kumar Mukhiya** | **23070126167** | Apache Spark / PySpark ML, Distributed NLP Sentiment & Isolation Forest Analytics |
-| **Inesh G** | **23070126160** | Docker Multi-Node Cluster Orchestration & Streamlit Visualization Dashboard |
-
----
 
 ## 📑 Table of Contents
 1. [Project Overview](#-project-overview)
