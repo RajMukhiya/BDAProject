@@ -19,6 +19,9 @@ services:
     container_name: master
     hostname: master
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - NODE_ROLE=master
     ports:
@@ -45,6 +48,9 @@ services:
     container_name: slave1
     hostname: slave1
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - NODE_ROLE=slave
     volumes:
@@ -61,6 +67,9 @@ services:
     container_name: slave2
     hostname: slave2
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - NODE_ROLE=slave
     volumes:
@@ -77,6 +86,9 @@ services:
     container_name: slave3
     hostname: slave3
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
       - NODE_ROLE=slave
     volumes:

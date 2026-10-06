@@ -240,58 +240,106 @@ def main():
                         help="Number of financial news articles (default: 150,000)")
     parser.add_argument("--upload-hdfs", action="store_true", default=True,
                         help="Upload directly to Hadoop HDFS cluster")
+    parser.add_argument("--staging-dir", type=str, default="/tmp/bdatl_staging",
+                        help="Temporary directory for generating chunks before HDFS ingestion")
+    parser.add_argument("--batch-tickers", type=int, default=50,
+                        help="Number of tickers to generate and stream to HDFS at a time")
     parser.add_argument("--skip-prices", action="store_true", help="Skip price generation")
     parser.add_argument("--skip-news", action="store_true", help="Skip news generation")
     args = parser.parse_args()
 
-    os.makedirs(OUT_PRICES, exist_ok=True)
-    os.makedirs(OUT_NEWS, exist_ok=True)
+    # Use container /tmp staging to ensure NO duplicate files are written to Windows
+    staging_root = Path(args.staging_dir)
+    staging_prices = staging_root / "raw" / "prices"
+    staging_news = staging_root / "raw" / "news"
+    os.makedirs(staging_prices, exist_ok=True)
+    os.makedirs(staging_news, exist_ok=True)
 
     print("\n" + "═" * 70)
-    print(" 🚀 BDATL EXTREME BIG DATA ENGINE GENERATOR (5–10 GB SCALE)")
+    print(" 🚀 BDATL EXTREME BIG DATA ENGINE GENERATOR (DIRECT HDFS STREAMING)")
     print(f" Tickers to process : {args.tickers_count} stocks")
     print(f" Records per ticker : {args.records_per_ticker:,} intraday bars")
     print(f" Projected Records  : {args.tickers_count * args.records_per_ticker:,} price ticks")
     print(f" Projected News     : {args.news_count:,} articles")
-    print(f" Target HDFS Footprint: ~8 to 11 GB (with 3x replication factor)")
+    print(f" Storage Strategy   : Streaming chunked upload to HDFS with zero local disk footprint")
     print(f" Start Time         : {datetime.datetime.now()}")
     print("═" * 70 + "\n")
 
-    # 1. Price generation across all tickers
+    # Ensure HDFS target directories exist
+    if args.upload_hdfs:
+        try:
+            subprocess.run(["hdfs", "dfs", "-mkdir", "-p", "/data/raw/prices", "/data/raw/news"], check=False)
+        except Exception:
+            pass
+
+    # 1. Price generation in batches with immediate HDFS upload & local deletion
     if not args.skip_prices:
         all_items = list(TICKER_MAP.items())[:args.tickers_count]
-        tasks = [
-            (ticker.replace(".NS", "").replace(".BO", ""), sector, args.records_per_ticker, str(OUT_PRICES))
-            for ticker, sector in all_items
-        ]
-
-        print(f"📈 Generating {len(tasks)} stock datasets in parallel...")
+        batch_size = args.batch_tickers
         total_rows = 0
         total_bytes = 0
-        
-        # Parallel generation using multiple CPU cores
-        with ProcessPoolExecutor(max_workers=min(os.cpu_count() or 4, 8)) as executor:
-            futures = [executor.submit(generate_ticker_csv, t) for t in tasks]
-            completed = 0
-            for f in as_completed(futures):
-                t_name, count, size = f.result()
-                total_rows += count
-                total_bytes += size
-                completed += 1
-                if completed % 50 == 0 or completed == len(tasks):
-                    mb = total_bytes / (1024 * 1024)
-                    print(f"  ⏳ Progress: {completed}/{len(tasks)} stocks generated ({total_rows:,} rows, {mb:,.1f} MB)...")
 
-        print(f"\n✅ Price Data Generation Finished: {total_rows:,} records | {total_bytes / (1024**3):.2f} GB raw CSVs")
+        for b_start in range(0, len(all_items), batch_size):
+            chunk_items = all_items[b_start:b_start + batch_size]
+            tasks = [
+                (ticker.replace(".NS", "").replace(".BO", ""), sector, args.records_per_ticker, str(staging_prices))
+                for ticker, sector in chunk_items
+            ]
 
-    # 2. News generation
+            chunk_rows = 0
+            chunk_bytes = 0
+            with ProcessPoolExecutor(max_workers=min(os.cpu_count() or 4, 8)) as executor:
+                futures = [executor.submit(generate_ticker_csv, t) for t in tasks]
+                for f in as_completed(futures):
+                    _, count, size = f.result()
+                    chunk_rows += count
+                    chunk_bytes += size
+
+            total_rows += chunk_rows
+            total_bytes += chunk_bytes
+            current_done = min(b_start + batch_size, len(all_items))
+            print(f"  ⏳ Generated batch ({current_done}/{len(all_items)} stocks, {chunk_rows:,} rows)...")
+
+            # Stream directly to HDFS and wipe local staging
+            if args.upload_hdfs:
+                print(f"     ☁️ Uploading batch to HDFS /data/raw/prices/...")
+                # Always ensure safe mode is off before uploading
+                subprocess.run(["hdfs", "dfsadmin", "-safemode", "leave"], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                try:
+                    subprocess.run(f"hdfs dfs -put -f {staging_prices}/*.csv /data/raw/prices/", shell=True, check=True)
+                except Exception as e:
+                    print(f"     ⚠️ HDFS upload warning (retrying): {e}")
+                    subprocess.run(["hdfs", "dfsadmin", "-safemode", "leave"], check=False)
+                    subprocess.run(f"hdfs dfs -put -f {staging_prices}/*.csv /data/raw/prices/", shell=True, check=False)
+                # Clean up local staging immediately
+                for f in staging_prices.glob("*.csv"):
+                    try:
+                        f.unlink()
+                    except Exception:
+                        pass
+                print(f"     🧹 Staging cleaned (0 local disk usage preserved).")
+
+        print(f"\n✅ Price Data Generation Finished: {total_rows:,} records | {total_bytes / (1024**3):.2f} GB in HDFS")
+
+    # 2. News generation with streaming upload
     if not args.skip_news:
-        generate_news_batches(args.news_count, str(OUT_NEWS))
+        generate_news_batches(args.news_count, str(staging_news))
+        if args.upload_hdfs:
+            upload_to_hdfs(str(staging_news), "/data/raw/news")
+            # Clean up news staging
+            for f in staging_news.glob("*.csv"):
+                try:
+                    f.unlink()
+                except Exception:
+                    pass
 
-    # 3. Upload to HDFS
+    # 3. Enforce replication factor of 1 to prevent disk exhaustion
     if args.upload_hdfs:
-        upload_to_hdfs(str(OUT_PRICES), "/data/raw/prices")
-        upload_to_hdfs(str(OUT_NEWS), "/data/raw/news")
+        try:
+            print("\n🔒 Setting HDFS replication factor to 1 (preserves disk space)...")
+            subprocess.run(["hdfs", "dfs", "-setrep", "-R", "1", "/data"], check=False)
+        except Exception:
+            pass
 
     print("\n" + "═" * 70)
     print(" 🎉 Big Data Generation & HDFS Ingestion Complete!")

@@ -13,6 +13,11 @@ import sys
 import datetime
 import numpy as np
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql import Window
@@ -66,14 +71,13 @@ def load_price_data(spark):
             rename_map = {
                 "Date": "trade_date", "Open": "open_price", "High": "high_price",
                 "Low": "low_price", "Close": "close_price", "Adj Close": "adj_close",
-                "Ticker": "ticker", "Exchange": "exchange",
+                "Volume": "volume", "Ticker": "ticker", "Exchange": "exchange",
             }
             for old, new in rename_map.items():
                 if old in df.columns and old != new:
                     df = df.withColumnRenamed(old, new)
-            # Cast Volume explicitly to DoubleType after rename
-            if "Volume" in df.columns:
-                df = df.withColumn("volume", F.col("Volume").cast(DoubleType())).drop("Volume")
+            if "volume" in df.columns:
+                df = df.withColumn("volume", F.col("volume").cast(DoubleType()))
             print(f"\u2705 Registered price stream from {path}")
             return df
         except Exception as e:
@@ -149,7 +153,13 @@ def compute_technical_features(price_df):
 
 
 def run_isolation_forest(ticker_data: dict) -> list:
-    """Run Isolation Forest on a per-ticker basis using sklearn."""
+    """Run Isolation Forest on a per-ticker basis using sklearn.
+
+    NOTE: This function is a standalone local/testing fallback.
+    In distributed production (spark-submit), main() uses a fully Spark-native
+    z-score approach instead — sklearn does not run distributed across the cluster.
+    This function can be called directly for single-machine debugging or unit tests.
+    """
     results = []
 
     feature_cols = [

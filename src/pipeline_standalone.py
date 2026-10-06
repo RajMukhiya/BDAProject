@@ -103,8 +103,8 @@ def compute_sentiment(text):
         return 0.0, "neutral", 0.0
 
 
-def run_sentiment_pipeline(news_df):
-    """Run sentiment analysis on news data."""
+def run_sentiment_pipeline(news_df, reddit_df=None):
+    """Run sentiment analysis on news and Reddit data."""
     print("\n🧠 Stage: NLP Sentiment Analysis")
 
     rows = []
@@ -131,6 +131,28 @@ def run_sentiment_pipeline(news_df):
                         "processed_at": datetime.datetime.now().isoformat(),
                     })
 
+    # Process Reddit
+    if reddit_df is not None and not reddit_df.empty:
+        print(f"  Processing {len(reddit_df)} reddit posts...")
+        for _, row in reddit_df.iterrows():
+            text = f"{row.get('title', '')} {row.get('selftext', '')}"
+            score, label, confidence = compute_sentiment(text)
+            tickers = str(row.get("matched_tickers", "GENERAL"))
+
+            for ticker in tickers.split(","):
+                ticker = ticker.strip()
+                if ticker:
+                    rows.append({
+                        "source_type": "reddit",
+                        "source_id": str(row.get("post_id", "")),
+                        "ticker": ticker,
+                        "sentiment_score": score,
+                        "sentiment_label": label,
+                        "confidence": confidence,
+                        "event_date": str(row.get("created_utc", row.get("fetched_at", ""))),
+                        "processed_at": datetime.datetime.now().isoformat(),
+                    })
+
     if not rows:
         print("  ⚠️ No text data to analyze.")
         return pd.DataFrame()
@@ -144,6 +166,7 @@ def run_sentiment_pipeline(news_df):
     print(f"  ✅ Saved {len(sentiment_df)} sentiment scores")
     print(f"     Labels: {sentiment_df['sentiment_label'].value_counts().to_dict()}")
     return sentiment_df
+
 
 
 # ---------------------------------------------------------------------------
@@ -422,18 +445,21 @@ def main():
     print("[DATA] Loading raw data...")
     prices_df = load_csvs(RAW_PRICES)
     news_df = load_csvs(RAW_NEWS)
+    reddit_df = load_csvs(RAW_REDDIT)
     print(f"  Prices: {len(prices_df)} rows from {RAW_PRICES}")
     print(f"  News:   {len(news_df)} rows from {RAW_NEWS}")
+    print(f"  Reddit: {len(reddit_df)} rows from {RAW_REDDIT}")
 
-    if prices_df.empty and news_df.empty:
+    if prices_df.empty and news_df.empty and reddit_df.empty:
         print("\n[ERROR] No raw data found. Run the ingestion scripts first:")
         print("   python -m src.ingestion.fetch_price --no-hdfs")
         print("   python -m src.ingestion.fetch_news --no-hdfs")
+        print("   python -m src.ingestion.fetch_reddit --no-hdfs")
         print("   OR: python -m src.generate_demo_data")
         sys.exit(1)
 
     # Run NLP sentiment
-    sentiment_df = run_sentiment_pipeline(news_df)
+    sentiment_df = run_sentiment_pipeline(news_df, reddit_df)
 
     # Run anomaly detection
     anomaly_df = run_anomaly_detection(prices_df, sentiment_df)

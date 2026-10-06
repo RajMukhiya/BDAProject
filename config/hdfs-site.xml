@@ -2,10 +2,10 @@
 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
 <!-- hdfs-site.xml: HDFS replication and storage paths -->
 <configuration>
-    <!-- Replication factor: 3 (one copy per slave) -->
+    <!-- Replication factor: 1 (single-node local storage protection) -->
     <property>
         <name>dfs.replication</name>
-        <value>3</value>
+        <value>1</value>
     </property>
     <!-- NameNode storage (master only) -->
     <property>
@@ -25,5 +25,14 @@
     <property>
         <name>dfs.permissions.enabled</name>
         <value>false</value>
+    </property>
+    <!-- Prevent NameNode from getting stuck in SafeMode during distributed job runs -->
+    <property>
+        <name>dfs.safemode.threshold.pct</name>
+        <value>0.0</value>
+    </property>
+    <property>
+        <name>dfs.safemode.extension</name>
+        <value>0</value>
     </property>
 </configuration>

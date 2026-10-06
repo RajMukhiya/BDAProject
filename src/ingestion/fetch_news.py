@@ -63,6 +63,10 @@ _DATA_ROOT = _resolve_data_root()
 OUTPUT_DIR = str(_DATA_ROOT / "raw" / "news")
 HDFS_DIR = "/data/raw/news"
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from src.config.tickers import TICKER_KEYWORDS
 
 

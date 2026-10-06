@@ -9,6 +9,11 @@ HDFS News -> Spark DataFrame -> TF-IDF -> TextBlob Sentiment
 import datetime
 import sys
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from pyspark.sql import SparkSession, Row
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
