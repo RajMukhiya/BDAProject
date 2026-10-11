@@ -53,6 +53,7 @@ if [ "${NODE_ROLE}" = "master" ]; then
         --server.address=0.0.0.0 \
         --server.headless=true \
         > /tmp/streamlit.log 2>&1 &
+    disown
 
     echo "[MASTER] Streamlit Dashboard launched in background."
 
@@ -61,6 +62,7 @@ if [ "${NODE_ROLE}" = "master" ]; then
         echo "[MASTER] Launching data pipeline in background..."
         : > /tmp/pipeline.log
         nohup bash /app/run_pipeline.sh >> /tmp/pipeline.log 2>&1 &
+        disown
     else
         echo "[MASTER] Processed data already exists in HDFS. Skipping auto-pipeline."
     fi
