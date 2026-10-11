@@ -263,9 +263,9 @@ def fetch_subreddit_posts(reddit, subreddit_name: str, limit: int = 500) -> list
                 tickers = extract_tickers(full_text)
 
                 # Convert UTC timestamp to ISO string
-                created_dt = datetime.datetime.utcfromtimestamp(post.created_utc).strftime(
-                    "%Y-%m-%dT%H:%M:%S"
-                )
+                created_dt = datetime.datetime.fromtimestamp(
+                    post.created_utc, tz=datetime.timezone.utc
+                ).strftime("%Y-%m-%dT%H:%M:%S")
 
                 posts.append({
                     "subreddit": subreddit_name,
