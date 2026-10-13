@@ -1,5 +1,6 @@
 .env
-data/
+# Exclude log files in data/ but track datasets for cloud deployment
+data/*.log
 __pycache__/
 *.pyc
 *.pyo

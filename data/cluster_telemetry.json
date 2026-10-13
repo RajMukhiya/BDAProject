@@ -1,0 +1,140 @@
+{
+  "spark": {
+    "status": "ALIVE",
+    "url": "spark://master:7077",
+    "alive_workers": 3,
+    "total_workers": 3,
+    "cores": 36,
+    "cores_used": 6,
+    "memory_gb": 20.3,
+    "apps_running": 1,
+    "apps_completed": 3,
+    "active_apps": [
+      {
+        "id": "app-20261013133210-0003",
+        "starttime": 1791818730000,
+        "name": "BDATL_Sentiment_Momentum",
+        "cores": 6,
+        "user": "root",
+        "memoryperexecutor": 1024,
+        "memoryperslave": 1024,
+        "resourcesperexecutor": [],
+        "resourcesperslave": [],
+        "submitdate": "Mon Oct 13 13:32:10 IST 2026",
+        "state": "RUNNING",
+        "duration": 498000
+      }
+    ],
+    "completed_apps": [
+      {
+        "id": "app-20261013130001-0000",
+        "starttime": 1791817201000,
+        "name": "BDATL_NLP_Sentiment",
+        "cores": 6,
+        "user": "root",
+        "memoryperexecutor": 1024,
+        "memoryperslave": 1024,
+        "submitdate": "Mon Oct 13 13:00:01 IST 2026",
+        "state": "FINISHED",
+        "duration": 184000
+      },
+      {
+        "id": "app-20261013131520-0001",
+        "starttime": 1791818120000,
+        "name": "BDATL_Anomaly_Detector",
+        "cores": 6,
+        "user": "root",
+        "memoryperexecutor": 1024,
+        "memoryperslave": 1024,
+        "submitdate": "Mon Oct 13 13:15:20 IST 2026",
+        "state": "FINISHED",
+        "duration": 312000
+      },
+      {
+        "id": "app-20261013132500-0002",
+        "starttime": 1791818700000,
+        "name": "BDATL_Sector_Momentum",
+        "cores": 6,
+        "user": "root",
+        "memoryperexecutor": 1024,
+        "memoryperslave": 1024,
+        "submitdate": "Mon Oct 13 13:25:00 IST 2026",
+        "state": "FINISHED",
+        "duration": 267000
+      }
+    ],
+    "workers": [
+      {
+        "id": "worker-20261013130000-172.19.0.2-42909",
+        "host": "172.19.0.2",
+        "port": 42909,
+        "webuiaddress": "http://172.19.0.2:8081",
+        "cores": 12,
+        "coresused": 2,
+        "coresfree": 10,
+        "memory": 6916,
+        "memoryused": 1024,
+        "memoryfree": 5892,
+        "resources": {},
+        "resourcesused": {},
+        "resourcesfree": {},
+        "state": "ALIVE",
+        "lastheartbeat": 1791819330000
+      },
+      {
+        "id": "worker-20261013130001-172.19.0.3-36775",
+        "host": "172.19.0.3",
+        "port": 36775,
+        "webuiaddress": "http://172.19.0.3:8081",
+        "cores": 12,
+        "coresused": 2,
+        "coresfree": 10,
+        "memory": 6916,
+        "memoryused": 1024,
+        "memoryfree": 5892,
+        "resources": {},
+        "resourcesused": {},
+        "resourcesfree": {},
+        "state": "ALIVE",
+        "lastheartbeat": 1791819332000
+      },
+      {
+        "id": "worker-20261013130002-172.19.0.5-45889",
+        "host": "172.19.0.5",
+        "port": 45889,
+        "webuiaddress": "http://172.19.0.5:8081",
+        "cores": 12,
+        "coresused": 2,
+        "coresfree": 10,
+        "memory": 6916,
+        "memoryused": 1024,
+        "memoryfree": 5892,
+        "resources": {},
+        "resourcesused": {},
+        "resourcesfree": {},
+        "state": "ALIVE",
+        "lastheartbeat": 1791819335000
+      }
+    ]
+  },
+  "hadoop": {
+    "status": "ACTIVE",
+    "capacity_gb": 3020.56,
+    "used_mb": 12097.8,
+    "used_gb": 11.81,
+    "percent_used": 0.39,
+    "live_datanodes": 3,
+    "dead_datanodes": 0,
+    "blocks": 577,
+    "files": 606
+  },
+  "yarn": {
+    "status": "ACTIVE",
+    "active_nodes": 3,
+    "allocated_mb": 3072,
+    "total_mb": 20748,
+    "containers": 6,
+    "apps_running": 1,
+    "apps_completed": 3
+  }
+}
