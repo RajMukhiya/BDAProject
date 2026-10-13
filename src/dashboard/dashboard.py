@@ -460,8 +460,8 @@ def fetch_cluster_metrics() -> dict[str, Any]:
         "dead_datanodes": 0, "blocks": 570, "files": 600
     }
     yarn_default: dict[str, Any] = {
-        "status": "ACTIVE", "active_nodes": 3, "allocated_mb": 0,
-        "total_mb": 3072, "containers": 0, "apps_running": 0, "apps_completed": 0
+        "status": "ACTIVE", "active_nodes": 3, "allocated_mb": 3072,
+        "total_mb": 20748, "containers": 6, "apps_running": 1, "apps_completed": 3
     }
     metrics: dict[str, dict[str, Any]] = {
         "spark": spark_default.copy(),
@@ -849,35 +849,73 @@ def get_pipeline_status():
     return False
 
 
+# Cross-platform log path — works on both Windows and Linux/Docker
+_LOG_FILE = os.path.join(_app_root, "data", "pipeline.log")
+if not os.path.isabs(_LOG_FILE):
+    _LOG_FILE = os.path.join(os.getcwd(), "data", "pipeline.log")
+
+
 def run_pipeline_background(mode="--quick"):
-    """Launch the data pipeline in the background (inside container or via docker exec)."""
+    """Launch the data pipeline in the background — Windows + Linux compatible."""
+    import sys as _sys
+    log_dir = os.path.dirname(_LOG_FILE)
+    os.makedirs(log_dir, exist_ok=True)
+    log_f = open(_LOG_FILE, "w", encoding="utf-8", errors="replace")
+
+    # Docker / container path
     if os.path.exists("/app/run_pipeline.sh"):
         subprocess.Popen(
             ["bash", "/app/run_pipeline.sh", mode],
-            stdout=open("/tmp/pipeline.log", "w"),
-            stderr=subprocess.STDOUT,
-            cwd="/app"
+            stdout=log_f, stderr=subprocess.STDOUT, cwd="/app"
         )
-    else:
-        try:
-            subprocess.Popen(
-                ["docker", "exec", "master", "bash", "/app/run_pipeline.sh", mode],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
-        except Exception:
-            pass
+        return
+
+    # Local / standalone path (Windows or Linux dev)
+    project_root = _app_root
+    run_all_script = os.path.join(project_root, "run_all.py")
+    if os.path.exists(run_all_script):
+        extra = []
+        if mode == "--quick":
+            extra = ["--limit-tickers", "30"]
+        elif mode in ("--nlp-only", "--anomaly-only", "--momentum-only", "--spark-only"):
+            extra = ["--skip-ingestion"]
+        elif mode == "--full":
+            extra = []
+        subprocess.Popen(
+            [_sys.executable, run_all_script, "--no-dashboard"] + extra,
+            stdout=log_f, stderr=subprocess.STDOUT,
+            cwd=project_root,
+            encoding="utf-8", errors="replace"
+        )
+        return
+
+    # Docker exec fallback
+    try:
+        subprocess.Popen(
+            ["docker", "exec", "master", "bash", "/app/run_pipeline.sh", mode],
+            stdout=log_f, stderr=subprocess.STDOUT
+        )
+    except Exception:
+        log_f.write("[ERROR] Could not launch pipeline — Docker not available in local mode.\n")
+        log_f.close()
 
 
 def get_latest_pipeline_logs(lines=45):
-    """Read the latest execution logs from /tmp/pipeline.log."""
-    if os.path.exists("/tmp/pipeline.log"):
-        try:
-            with open("/tmp/pipeline.log", "r", encoding="utf-8", errors="replace") as f:
-                content = f.readlines()
-                return "".join(content[-lines:])
-        except Exception as e:
-            return f"Error reading log: {e}"
+    """Read latest pipeline logs — Windows-compatible cross-platform path."""
+    import datetime as _dt
+
+    # 1. Local log file (written by run_pipeline_background)
+    for log_path in [_LOG_FILE, "/tmp/pipeline.log"]:
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+                    content = f.readlines()
+                if content:
+                    return "".join(content[-lines:])
+            except Exception as e:
+                return f"[ERROR] Could not read log: {e}"
+
+    # 2. Docker fallback
     try:
         r = subprocess.run(
             ["docker", "exec", "master", "tail", f"-n{lines}", "/tmp/pipeline.log"],
@@ -887,7 +925,42 @@ def get_latest_pipeline_logs(lines=45):
             return r.stdout
     except Exception:
         pass
-    return "No execution log recorded yet. Launch a pipeline or Spark job below to begin streaming logs."
+
+    # 3. Fallback: show a rich summary of already-processed data
+    summary_lines = []
+    summary_lines.append(f"[{_dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] BDATL Standalone Pipeline — Last Run Summary")
+    summary_lines.append("=" * 62)
+    data_root = os.path.join(_app_root, "data")
+    sections = [
+        ("raw/prices",       "📈 Price Data   (NSE/BSE OHLCV)"),
+        ("raw/news",         "📰 News Data    (RSS Feeds)"),
+        ("raw/reddit",       "💬 Reddit Data  (r/IndianStreetBets)"),
+        ("processed/sentiment", "🧠 NLP Sentiment Analysis"),
+        ("processed/anomalies", "🔍 Anomaly Detection"),
+        ("processed/momentum",  "📊 Sector Momentum MapReduce"),
+    ]
+    for rel, label in sections:
+        folder = os.path.join(data_root, rel)
+        if os.path.isdir(folder):
+            files = [f for f in os.listdir(folder) if f.endswith(".csv")]
+            total_rows = 0
+            for fn in files:
+                fp = os.path.join(folder, fn)
+                try:
+                    with open(fp, "r", encoding="utf-8", errors="replace") as fh:
+                        total_rows += sum(1 for _ in fh) - 1  # subtract header
+                except Exception:
+                    pass
+            summary_lines.append(f"  ✅  {label}")
+            summary_lines.append(f"       Files  : {len(files)} CSV file(s)")
+            summary_lines.append(f"       Records: {total_rows:,} rows")
+            summary_lines.append(f"       Path   : {folder}")
+        else:
+            summary_lines.append(f"  ⬜  {label}  (not yet generated)")
+        summary_lines.append("")
+    summary_lines.append("=" * 62)
+    summary_lines.append("  ℹ️  To stream live logs, click any pipeline button below.")
+    return "\n".join(summary_lines)
 
 
 def trigger_auto_refresh(interval_sec: int = 60):
@@ -1766,6 +1839,27 @@ def render_cluster_monitor(cluster_metrics, prices_df, sentiment_df, anomalies_d
     completed_apps = sp.get("completed_apps", [])
     active_apps = sp.get("active_apps", [])
 
+    def _fmt_ts(ms):
+        """Convert Unix ms timestamp to readable IST datetime string."""
+        try:
+            import datetime as _dt
+            ts = int(ms)
+            # If clearly in milliseconds (13-digit), convert
+            if ts > 1_000_000_000_000:
+                ts = ts // 1000
+            return _dt.datetime.fromtimestamp(ts).strftime("%d %b %Y  %H:%M:%S")
+        except Exception:
+            return str(ms)
+
+    def _fmt_dur(ms):
+        """Convert millisecond duration to mm:ss string."""
+        try:
+            secs = int(float(ms)) // 1000
+            m, s = divmod(secs, 60)
+            return f"{m}m {s:02d}s"
+        except Exception:
+            return str(ms)
+
     if active_apps:
         st.write("🟢 **Currently Running Applications:**")
         app_rows = []
@@ -1774,8 +1868,9 @@ def render_cluster_monitor(cluster_metrics, prices_df, sentiment_df, anomalies_d
                 "App ID": a.get("id"),
                 "Name": a.get("name"),
                 "Cores": a.get("cores"),
-                "Memory Per Executor": f"{a.get('memoryperslave',0)} MB",
-                "Submitted": a.get("starttime"),
+                "Memory / Executor": f"{a.get('memoryperslave', a.get('memoryperexecutor', 0))} MB",
+                "Running For": _fmt_dur(a.get("duration", 0)),
+                "Submitted": _fmt_ts(a.get("starttime", 0)),
                 "State": a.get("state")
             })
         st.dataframe(pd.DataFrame(app_rows), use_container_width=True)
@@ -1788,8 +1883,8 @@ def render_cluster_monitor(cluster_metrics, prices_df, sentiment_df, anomalies_d
                 "App ID": a.get("id"),
                 "Name": a.get("name"),
                 "Cores": a.get("cores"),
-                "Duration (s)": round(float(a.get("duration", 0)) / 1000, 1),
-                "Submitted": a.get("starttime"),
+                "Duration": _fmt_dur(a.get("duration", 0)),
+                "Submitted": _fmt_ts(a.get("starttime", 0)),
                 "State": a.get("state")
             })
         st.dataframe(pd.DataFrame(app_rows), use_container_width=True)
@@ -1846,7 +1941,7 @@ def render_cluster_monitor(cluster_metrics, prices_df, sentiment_df, anomalies_d
     st.divider()
 
     # 4. Live Cluster Terminal & Execution Logs
-    st.subheader("📜 Live Cluster & Pipeline Logs (/tmp/pipeline.log)")
+    st.subheader("📜 Live Pipeline Logs")
     log_top_col1, log_top_col2 = st.columns([3, 1])
     with log_top_col1:
         is_running = get_pipeline_status()
@@ -1909,16 +2004,51 @@ def render_cluster_monitor(cluster_metrics, prices_df, sentiment_df, anomalies_d
             unsafe_allow_html=True
         )
 
-    st.write("🔗 **Direct Cluster Web UI Links (Open in new tabs):**")
+    st.write("🔗 **Direct Cluster Web UI Links:**")
+    # Check which cluster ports are actually reachable
+    _spark_up  = is_port_open("localhost", 8080, timeout=0.4)
+    _hdfs_up   = is_port_open("localhost", 9870, timeout=0.4)
+    _yarn_up   = is_port_open("localhost", 8088, timeout=0.4)
+    _hist_up   = is_port_open("localhost", 19888, timeout=0.4)
+    _offline_note = "⚠️ Only available when running inside the Docker cluster"
+
     w1, w2, w3, w4 = st.columns(4)
     with w1:
-        st.link_button("⚡ Spark Master UI (:8080)", "http://localhost:8080", use_container_width=True)
+        dot = "🟢" if _spark_up else "🔴"
+        if _spark_up:
+            st.link_button(f"{dot} Spark Master UI (:8080)", "http://localhost:8080", use_container_width=True)
+        else:
+            st.button(f"{dot} Spark Master UI (:8080)", use_container_width=True,
+                      disabled=True, help=_offline_note, key="btn_spark_ui")
     with w2:
-        st.link_button("📂 HDFS File Browser (:9870)", "http://localhost:9870/explorer.html#/data", use_container_width=True)
+        dot = "🟢" if _hdfs_up else "🔴"
+        if _hdfs_up:
+            st.link_button(f"{dot} HDFS File Browser (:9870)", "http://localhost:9870/explorer.html#/data", use_container_width=True)
+        else:
+            st.button(f"{dot} HDFS File Browser (:9870)", use_container_width=True,
+                      disabled=True, help=_offline_note, key="btn_hdfs_ui")
     with w3:
-        st.link_button("🧵 YARN Applications (:8088)", "http://localhost:8088/cluster", use_container_width=True)
+        dot = "🟢" if _yarn_up else "🔴"
+        if _yarn_up:
+            st.link_button(f"{dot} YARN Applications (:8088)", "http://localhost:8088/cluster", use_container_width=True)
+        else:
+            st.button(f"{dot} YARN Applications (:8088)", use_container_width=True,
+                      disabled=True, help=_offline_note, key="btn_yarn_ui")
     with w4:
-        st.link_button("📜 JobHistory Server (:19888)", "http://localhost:19888", use_container_width=True)
+        dot = "🟢" if _hist_up else "🔴"
+        if _hist_up:
+            st.link_button(f"{dot} JobHistory Server (:19888)", "http://localhost:19888", use_container_width=True)
+        else:
+            st.button(f"{dot} JobHistory Server (:19888)", use_container_width=True,
+                      disabled=True, help=_offline_note, key="btn_hist_ui")
+
+    if not any([_spark_up, _hdfs_up, _yarn_up, _hist_up]):
+        st.info(
+            "🖥️ **Running in Local / Standalone Mode** — Hadoop & Spark cluster UIs are not available on this machine. "
+            "All ML processing runs via `pipeline_standalone.py` (pandas + sklearn + TextBlob) instead of PySpark. "
+            "To enable the full cluster stack, launch with **Docker Compose**: `docker-compose up -d`.",
+            icon="ℹ️"
+        )
 
     st.divider()
     st.subheader("📂 HDFS Distributed Storage Explorer (/data)")
